@@ -115,19 +115,53 @@ class ArxivRetriever(BaseRetriever):
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
         client = arxiv.Client(num_retries=10, delay_seconds=10)
-        query = '+'.join(self.config.source.arxiv.category)
+
+        
+        # query = '+'.join(self.config.source.arxiv.category)
+        # include_cross_list = self.config.source.arxiv.get("include_cross_list", False)
+        # # Get the latest paper from arxiv rss feed
+        # feed = feedparser.parse(f"https://rss.arxiv.org/atom/{query}")
+        # if 'Feed error for query' in feed.feed.title:
+        #     raise Exception(f"Invalid ARXIV_QUERY: {query}.")
+        # raw_papers = []
+        # allowed_announce_types = {"new", "cross"} if include_cross_list else {"new"}
+        # all_paper_ids = [
+        #     i.id.removeprefix("oai:arXiv.org:")
+        #     for i in feed.entries
+        #     if i.get("arxiv_announce_type", "new") in allowed_announce_types
+        # ]
         include_cross_list = self.config.source.arxiv.get("include_cross_list", False)
-        # Get the latest paper from arxiv rss feed
-        feed = feedparser.parse(f"https://rss.arxiv.org/atom/{query}")
-        if 'Feed error for query' in feed.feed.title:
-            raise Exception(f"Invalid ARXIV_QUERY: {query}.")
-        raw_papers = []
         allowed_announce_types = {"new", "cross"} if include_cross_list else {"new"}
-        all_paper_ids = [
-            i.id.removeprefix("oai:arXiv.org:")
-            for i in feed.entries
-            if i.get("arxiv_announce_type", "new") in allowed_announce_types
-        ]
+
+        raw_papers = []
+        all_paper_ids = []
+        seen_ids = set()
+
+        for category in self.config.source.arxiv.category:
+            feed_url = f"https://rss.arxiv.org/atom/{category}"
+            feed = feedparser.parse(feed_url)
+        
+            if getattr(feed, "bozo", False):
+                raise Exception(
+                    f"Failed to parse arXiv RSS feed: {feed_url}. "
+                    f"Reason: {getattr(feed, 'bozo_exception', 'unknown')}"
+                )
+        
+            feed_title = feed.feed.get("title", "")
+            if "Feed error for query" in feed_title:
+                raise Exception(f"Invalid ARXIV_QUERY: {category}.")
+        
+            for item in feed.entries:
+                announce_type = item.get("arxiv_announce_type", "new")
+                if announce_type not in allowed_announce_types:
+                    continue
+        
+                paper_id = item.id.removeprefix("oai:arXiv.org:")
+                if paper_id not in seen_ids:
+                    seen_ids.add(paper_id)
+                    all_paper_ids.append(paper_id)
+
+        
         if self.config.executor.debug:
             all_paper_ids = all_paper_ids[:10]
 
