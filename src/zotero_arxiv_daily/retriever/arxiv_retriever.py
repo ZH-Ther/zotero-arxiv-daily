@@ -143,7 +143,7 @@ class ArxivRetriever(BaseRetriever):
         # arXiv asks legacy API users not to exceed one request every 3 seconds.
         # Use a larger value to be safer on GitHub Actions shared runners.
         RSS_REQUEST_INTERVAL = 6
-        API_REQUEST_INTERVAL = 12
+        API_REQUEST_INTERVAL = 20
         RSS_TIMEOUT = 30
     
         max_rss_retries = 3
